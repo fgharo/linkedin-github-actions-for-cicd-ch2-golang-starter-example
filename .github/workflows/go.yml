@@ -2,7 +2,8 @@
 # For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
 
 name: Go
-
+env:
+  GIN_MODE: release
 on:
   push:
     branches: [ "main" ]
@@ -13,6 +14,8 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
+    permissions:
+      checks: write
     steps:
     - uses: actions/checkout@v4
 
@@ -20,9 +23,35 @@ jobs:
       uses: actions/setup-go@v4
       with:
         go-version: '1.20'
+        go-version-file: 'go.mod'
+
+    - name: Revive Action (Linting Go Code)
+      uses: morphy2k/revive-action@v2.5.9
+
+    - name: Staticcheck
+      uses: dominikh/staticcheck-action@v1.3.0
+      # with:
+      #   # Path to your Revive config within the repo (optional)
+      #   config: revive/config.toml
+      #   # Exclude patterns, separated by semicolons (optional)
+      #   exclude: "file.go;foo/bar.go;./foo/bar/..."
+      #   # Path pattern (default: ./...)
+      #   path: "./foo/..."
+      
 
     - name: Build
-      run: go build -v ./...
+      run: |
+        go mod download
+        go install gotest.tools/gotestsum@latest
 
     - name: Test
-      run: go test -v ./...
+      run: |
+        gotestsum --format=standard-verbose --junitfile=junit.xml
+
+    - name: Publish Test Reports
+      uses: mikepenz/action-junit-report@v3
+      if: success() || failure() # always run even if the previous step fails.
+      with:
+        report_paths: '**/junit.xml'
+        detailed_summary: true
+        include_passed: true
